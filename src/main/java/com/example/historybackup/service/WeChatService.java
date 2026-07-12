@@ -7,11 +7,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
-import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
@@ -73,9 +76,9 @@ public class WeChatService {
     }
 
     /**
-     * 上传永久图片素材
+     * 上传永久图片素材，返回包含 media_id 和 url 的 Map
      */
-    public String uploadImage(byte[] imageData, String fileName) throws IOException {
+    public Map<String, String> uploadImage(byte[] imageData, String fileName) throws IOException {
         String token = getToken();
         String boundary = "----WebKitFormBoundary" + UUID.randomUUID().toString().replace("-", "");
 
@@ -101,35 +104,96 @@ public class WeChatService {
         }
 
         String response = readResponse(conn);
-        log.info("上传图片响应: {}", response);
+        // ═══════════════════════════════════════════════════════════
+        // DEBUG: Log image upload result
+        // ═══════════════════════════════════════════════════════════
+        log.info(">>>>>> 上传图片响应: {}", response);
+        log.info(">>>>>> 上传图片 contains media_id? {} contains url? {}",
+                response.contains("media_id"), response.contains("url"));
 
         if (response.contains("media_id")) {
-            return extractJsonValue(response, "media_id");
+            Map<String, String> uploadResult = new HashMap<>();
+            String extractedMediaId = extractJsonValue(response, "media_id");
+            String extractedUrl = extractJsonValue(response, "url");
+            log.info(">>>>>> 上传图片提取结果: media_id='{}', url='{}'", extractedMediaId, extractedUrl);
+            uploadResult.put("media_id", extractedMediaId);
+            uploadResult.put("url", extractedUrl);
+            return uploadResult;
         } else if (response.contains("url")) {
-            return extractJsonValue(response, "url");
+            Map<String, String> uploadResult = new HashMap<>();
+            uploadResult.put("url", extractJsonValue(response, "url"));
+            return uploadResult;
         } else {
             String errMsg = response.contains("errmsg") ? extractJsonValue(response, "errmsg") : response;
             throw new IOException("上传图片失败: " + errMsg);
         }
     }
 
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+
     /**
-     * 创建草稿（图文消息）
+     * 从 HTML 中提取纯文本（去除标签），用于生成 digest
+     */
+    private String stripHtml(String html) {
+        if (html == null || html.isEmpty()) return "";
+        return html.replaceAll("<[^>]+>", "")
+                .replace("&amp;", "&")
+                .replace("&lt;", "<")
+                .replace("&gt;", ">")
+                .replace("&quot;", "\"")
+                .replace("&#39;", "'")
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
+    /**
+     * 创建草稿（图文消息）- 使用 Jackson 正确序列化 JSON
      */
     public String createDraft(String title, String content, String thumbMediaId) throws IOException {
         String token = getToken();
 
-        String body = "{"
-                + "\"articles\":[{\"title\":\"" + escapeJson(title) + "\","
-                + "\"content\":\"" + escapeJson(content) + "\","
-                + "\"thumb_media_id\":\"" + thumbMediaId + "\","
-                + "\"show_cover_pic\":1,"
-                + "\"need_open_comment\":0,"
-                + "\"only_fans_can_comment\":0}]}";
+        // ═══════════════════════════════════════════════════════════
+        // DEBUG: Log EXACT parameters received
+        // ═══════════════════════════════════════════════════════════
+        log.info(">>>>>> createDraft CALLED - title='{}', thumbMediaId='{}', content.length()={}, contentPreview='{}'",
+                title, thumbMediaId, content != null ? content.length() : -1,
+                content != null && content.length() > 300 ? content.substring(0, 300) + "..." : content);
+
+        // 自动生成摘要（digest）：去 HTML 标签，截取前 64 字（微信 API 限制 ≤64 字符）
+        String plainText = stripHtml(content);
+        String digest = plainText.length() > 64 ? plainText.substring(0, 64) : plainText;
+
+        // 使用 Jackson ObjectMapper 构建 JSON，确保所有字段正确序列化
+        ObjectNode article = objectMapper.createObjectNode();
+        article.put("title", title);
+        article.put("content", content);
+        article.put("digest", digest);
+        if (thumbMediaId != null && !thumbMediaId.isEmpty()) {
+            article.put("thumb_media_id", thumbMediaId);
+        }
+        article.put("show_cover_pic", 1);
+        article.put("need_open_comment", 0);
+        article.put("only_fans_can_comment", 0);
+
+        ArrayNode articles = objectMapper.createArrayNode();
+        articles.add(article);
+
+        ObjectNode root = objectMapper.createObjectNode();
+        root.set("articles", articles);
+
+        String body = objectMapper.writeValueAsString(root);
+        // ═══════════════════════════════════════════════════════════
+        // DEBUG: Log the EXACT request body going to WeChat API
+        // ═══════════════════════════════════════════════════════════
+        log.info(">>>>>> SENDING TO WECHAT API - Request body: {}", body);
+        log.info(">>>>>> Request body length (bytes): {}", body.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
 
         String urlStr = WECHAT_API + "/draft/add?access_token=" + token;
         String json = httpPost(urlStr, body);
-        log.info("创建草稿响应: {}", json);
+        // ═══════════════════════════════════════════════════════════
+        // DEBUG: Log the EXACT WeChat API response
+        // ═══════════════════════════════════════════════════════════
+        log.info(">>>>>> WECHAT API RESPONSE: {}", json);
 
         if (json.contains("media_id")) {
             return extractJsonValue(json, "media_id");
@@ -153,7 +217,9 @@ public class WeChatService {
             byte[] imageBytes = Base64.getDecoder().decode(base64Data);
 
             // 2. 上传图片作为永久素材
-            String mediaId = uploadImage(imageBytes, "history_screenshot.png");
+            Map<String, String> uploadResult = uploadImage(imageBytes, "history_screenshot.png");
+            String mediaId = uploadResult.get("media_id");
+            String imageUrl = uploadResult.getOrDefault("url", "");
 
             // 3. 获取选中记录信息
             List<HistoryRecord> selectedRecords = repository.findAllById(selectedIds);
@@ -166,10 +232,12 @@ public class WeChatService {
             }
             content.append("<p>选中 ").append(selectedRecords.size()).append(" 条记录</p>");
             content.append("<hr/>");
-            content.append("<p style=\"text-align:center\"><img src=\"{{image_url}}\" alt=\"截图\" style=\"max-width:100%%\"/></p>");
+            if (!imageUrl.isEmpty()) {
+                content.append("<p style=\"text-align:center\"><img src=\"").append(escapeHtml(imageUrl)).append("\" alt=\"截图\" style=\"max-width:100%\"/></p>");
+            }
             content.append("<hr/>");
             content.append("<h3>选中记录详情</h3>");
-            content.append("<table border=\"1\" cellpadding=\"5\" cellspacing=\"0\" style=\"border-collapse:collapse;width:100%%;font-size:13px\">");
+            content.append("<table border=\"1\" cellpadding=\"5\" cellspacing=\"0\" style=\"border-collapse:collapse;width:100%;font-size:13px\">");
             content.append("<tr><th>#</th><th>标题</th><th>URL</th><th>访问时间</th></tr>");
             int idx = 1;
             for (HistoryRecord r : selectedRecords) {
@@ -220,7 +288,9 @@ public class WeChatService {
         try (OutputStream os = conn.getOutputStream()) {
             os.write(body.getBytes(StandardCharsets.UTF_8));
         }
-        return readResponse(conn);
+        String response = readResponse(conn);
+        log.info(">>>>>> httpPost responseCode={}, response={}", conn.getResponseCode(), response);
+        return response;
     }
 
     private String readResponse(HttpURLConnection conn) throws IOException {
@@ -253,15 +323,6 @@ public class WeChatService {
         start += searchKey.length();
         int end = json.indexOf("\"", start);
         return end > start ? json.substring(start, end) : "";
-    }
-
-    private String escapeJson(String s) {
-        if (s == null) return "";
-        return s.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
     }
 
     private String escapeHtml(String s) {

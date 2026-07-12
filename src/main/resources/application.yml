@@ -23,6 +23,10 @@ wechat:
   appid: wx846808bc8f41d7ec
   secret: b8e93714e41f9ee4e95c28f5c88b2526
 
+screenshot:
+  nodejs: node
+  script: docs/screenshot.js
+
 logging:
   level:
-    com.example.historybackup: info
+    com.example: DEBUG

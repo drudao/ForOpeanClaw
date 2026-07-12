@@ -7,7 +7,7 @@
         <button
           v-if="selectedIds.length > 0"
           class="btn btn-wechat"
-          @click="sendToWeChat"
+          @click="sendSelectedUrls"
           :disabled="sending"
         >
           {{ sending ? '发送中...' : '📤 发送选中到公众号' }}
@@ -56,8 +56,31 @@
     <!-- 加载状态 -->
     <div v-if="loading" class="loading">加载中...</div>
 
+    <!-- 结果详情弹窗 -->
+    <div v-if="showResults" class="modal-overlay" @click.self="showResults = false">
+      <div class="modal-content">
+        <h3>📤 发送结果</h3>
+        <p class="result-summary">
+          共 {{ resultData.total }} 条，成功 {{ resultData.successCount }} 条，失败 {{ resultData.failCount }} 条
+        </p>
+        <div class="result-list">
+          <div v-for="r in resultData.results" :key="r.url" :class="['result-item', r.status]">
+            <div class="result-title">{{ truncate(r.title, 60) }}</div>
+            <div class="result-url">{{ truncate(r.url, 60) }}</div>
+            <div class="result-status">
+              <span v-if="r.status === 'success'" class="badge badge-success">✅ 成功</span>
+              <span v-else class="badge badge-fail">❌ 失败</span>
+              <span v-if="r.status === 'success'" class="result-id">文章ID: {{ r.articleId }}</span>
+              <span v-if="r.status === 'failed'" class="result-error">{{ r.error }}</span>
+            </div>
+          </div>
+        </div>
+        <button class="btn btn-search" @click="showResults = false">关闭</button>
+      </div>
+    </div>
+
     <!-- 数据列表 -->
-    <div v-else class="table-wrapper" ref="tableWrapper">
+    <div v-else class="table-wrapper">
       <table class="history-table" v-if="records.length > 0">
         <thead>
           <tr>
@@ -109,7 +132,6 @@
 
 <script>
 import axios from 'axios'
-import html2canvas from 'html2canvas'
 
 const API_BASE = '/api/history'
 
@@ -132,7 +154,9 @@ export default {
       message: '',
       messageType: '',
       selectedIds: [],
-      selectAll: false
+      selectAll: false,
+      showResults: false,
+      resultData: { total: 0, successCount: 0, failCount: 0, results: [] }
     }
   },
   mounted() {
@@ -163,48 +187,51 @@ export default {
       }
     },
 
-    async sendToWeChat() {
+    async sendSelectedUrls() {
       if (this.selectedIds.length === 0) {
         this.showMessage('请先选择要发送的记录', 'error')
         return
       }
+
       this.sending = true
       try {
-        // 1. 使用 html2canvas 截图表格区域
-        const tableWrapper = this.$refs.tableWrapper
-        if (!tableWrapper) {
-          this.showMessage('❌ 未找到表格区域', 'error')
+        // 1. 获取选中的记录详情（标题 + URL）
+        const idsParam = this.selectedIds.join(',')
+        const res = await axios.get(`${API_BASE}/by-ids`, { params: { ids: idsParam } })
+        const records = res.data
+
+        if (!records || records.length === 0) {
+          this.showMessage('❌ 未找到选中的记录', 'error')
           return
         }
 
-        // 清除选中样式确保截图干净
-        const canvas = await html2canvas(tableWrapper, {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: '#ffffff',
-          allowTaint: true,
-          logging: false
-        })
+        // 2. 构建 URL 列表
+        const urlItems = records.map(r => ({ url: r.url, title: r.title || r.url }))
 
-        const imageData = canvas.toDataURL('image/png')
-        const imageSize = Math.round((imageData.length * 3) / 4 / 1024)
+        // 3. 发送到后端处理（Puppeteer 截图 → 上传微信 → 创建草稿）
+        const sendRes = await axios.post(`${API_BASE}/wechat/send-urls`, urlItems)
 
-        // 2. 发送到后端（由后端处理微信上传与草稿创建）
-        const res = await axios.post(`${API_BASE}/wechat/send`, {
-          imageData: imageData,
-          selectedIds: this.selectedIds,
-          keyword: this.keyword || ''
-        })
+        if (sendRes.data.success) {
+          this.resultData = {
+            total: sendRes.data.total,
+            successCount: sendRes.data.successCount,
+            failCount: sendRes.data.failCount,
+            results: sendRes.data.results
+          }
+          this.showResults = true
 
-        if (res.data.success) {
-          this.showMessage(`✅ 截图已发送到公众号草稿！文章ID: ${res.data.articleId}（截图 ${imageSize} KB）`, 'success')
-          this.selectedIds = []
-          this.selectAll = false
+          if (sendRes.data.successCount > 0) {
+            this.showMessage(`✅ ${sendRes.data.successCount} 条 URL 已截图发送到公众号草稿！`, 'success')
+            this.selectedIds = []
+            this.selectAll = false
+          } else {
+            this.showMessage('❌ 全部发送失败，请检查后端日志', 'error')
+          }
         } else {
-          this.showMessage('❌ 发送失败: ' + (res.data.message || '未知错误'), 'error')
+          this.showMessage('❌ 发送失败: ' + (sendRes.data.message || '未知错误'), 'error')
         }
       } catch (e) {
-        this.showMessage('❌ 发送失败: ' + (e.response?.data?.message || '后端服务未启动或截图出错: ' + e.message), 'error')
+        this.showMessage('❌ 发送失败: ' + (e.response?.data?.message || '后端服务未启动: ' + e.message), 'error')
       } finally {
         this.sending = false
       }
@@ -490,4 +517,69 @@ body {
 .pagination button:hover:not(:disabled) { background: #f0f2f5; }
 
 .page-info { font-size: 13px; color: #666; }
+
+/* Modal / Results dialog */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: #fff;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 640px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+}
+
+.modal-content h3 { margin-bottom: 12px; font-size: 18px; }
+
+.result-summary {
+  padding: 10px 14px;
+  background: #f0fdf4;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.result-list {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+
+.result-item {
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  border: 1px solid #e8ecf1;
+}
+
+.result-item.success { border-left: 4px solid #10b981; }
+.result-item.failed { border-left: 4px solid #ef4444; }
+
+.result-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.result-url { font-size: 12px; color: #999; margin-bottom: 6px; word-break: break-all; }
+
+.result-status { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+
+.badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge-success { background: #d1fae5; color: #065f46; }
+.badge-fail { background: #fee2e2; color: #991b1b; }
+
+.result-id { color: #666; font-size: 12px; }
+.result-error { color: #ef4444; font-size: 12px; }
 </style>
