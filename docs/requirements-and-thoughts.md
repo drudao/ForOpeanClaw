@@ -60,8 +60,49 @@
 | DELETE | /api/history/{id} | 删除单条记录 |
 | POST | /api/history/backup | 手动触发备份 |
 | GET | /api/history/stats | 获取统计数据 |
+| POST | /api/history/wechat/send | 发送截图到公众号草稿 |
 
-### 6. 前端页面设计
+### 6. 微信公众平台集成
+
+**新增功能：选中记录 → 截图 → 发送到公众号**
+
+1. **前端多选：** 每行增加复选框，支持全选/单选
+2. **html2canvas 截图：** 点击「发送选中到公众号」按钮后，html2canvas 捕获表格区域生成 PNG 截图
+3. **后端调用微信 API：** WeChatService 接收 base64 图片 → 上传为永久素材 → 创建图文草稿
+4. **草稿内容：** 截图图片 + 选中记录的表格详情
+
+#### 微信 API 调用流程
+
+```
+POST /api/history/wechat/send (前端 → 后端)
+  ↓
+WeChatService.sendScreenshotToWeChat()
+  ↓
+cgi-bin/token?grant_type=client_credential (获取 access_token)
+  ↓
+cgi-bin/material/add_material?type=image (上传永久图片)
+  ↓
+cgi-bin/draft/add (创建图文草稿)
+  ↓
+返回 article_id → 前端显示成功
+```
+
+#### 前端组件变更
+
+| 组件 | 变更 |
+|------|------|
+| 表格行 | 新增复选框列 (col-cb) |
+| 头部操作栏 | 新增「发送选中到公众号」按钮 |
+| 搜索栏 | 新增「全选」复选框 |
+| 样式 | 新增 .btn-wechat (微信绿)、.selected 行高亮 |
+
+#### 安全性注意
+
+- AppID 和 AppSecret 存储在 application.yml 和本地配置文件中
+- access_token 内存缓存，过期自动续期
+- API 调用仅允许后端发起，前端不直接接触微信凭证
+
+### 7. 前端页面设计
 
 单页面应用，三个功能区域：
 1. **顶部：** 标题 + 总记录数 + "立即备份"按钮

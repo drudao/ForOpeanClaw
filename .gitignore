@@ -4,3 +4,6 @@ target/
 *.original
 data/
 .settings.xml
+backend.err
+backend.log
+docs/node_modules/

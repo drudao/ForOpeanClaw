@@ -4,6 +4,14 @@
       <h1>📋 浏览器历史记录备份</h1>
       <div class="header-actions">
         <span class="total-count">共 {{ totalCount }} 条记录</span>
+        <button
+          v-if="selectedIds.length > 0"
+          class="btn btn-wechat"
+          @click="sendToWeChat"
+          :disabled="sending"
+        >
+          {{ sending ? '发送中...' : '📤 发送选中到公众号' }}
+        </button>
         <button class="btn btn-backup" @click="triggerBackup" :disabled="backuping">
           {{ backuping ? '备份中...' : '🔄 立即备份' }}
         </button>
@@ -33,6 +41,10 @@
         />
         <button class="btn btn-search" @click="search">🔍 查询</button>
         <button class="btn btn-clear" @click="resetSearch">清空</button>
+        <label class="select-all-label">
+          <input type="checkbox" v-model="selectAll" @change="toggleSelectAll" :disabled="records.length === 0" />
+          全选
+        </label>
       </div>
     </section>
 
@@ -45,10 +57,11 @@
     <div v-if="loading" class="loading">加载中...</div>
 
     <!-- 数据列表 -->
-    <div v-else class="table-wrapper">
+    <div v-else class="table-wrapper" ref="tableWrapper">
       <table class="history-table" v-if="records.length > 0">
         <thead>
           <tr>
+            <th class="col-cb"><input type="checkbox" v-model="selectAll" @change="toggleSelectAll" /></th>
             <th class="col-id">#</th>
             <th class="col-title">标题</th>
             <th class="col-url">URL</th>
@@ -58,7 +71,10 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(record, index) in records" :key="record.id">
+          <tr v-for="(record, index) in records" :key="record.id" :class="{ selected: selectedIds.includes(record.id) }">
+            <td class="col-cb">
+              <input type="checkbox" :checked="selectedIds.includes(record.id)" @change="toggleRow(record.id)" />
+            </td>
             <td class="col-id">{{ index + 1 + page * size }}</td>
             <td class="col-title">
               <a :href="record.url" target="_blank" rel="noopener" :title="record.title">
@@ -93,6 +109,7 @@
 
 <script>
 import axios from 'axios'
+import html2canvas from 'html2canvas'
 
 const API_BASE = '/api/history'
 
@@ -111,8 +128,11 @@ export default {
       loading: false,
       searched: false,
       backuping: false,
+      sending: false,
       message: '',
-      messageType: ''
+      messageType: '',
+      selectedIds: [],
+      selectAll: false
     }
   },
   mounted() {
@@ -122,7 +142,62 @@ export default {
     showMessage(msg, type = 'info') {
       this.message = msg
       this.messageType = type
-      setTimeout(() => { this.message = '' }, 3000)
+      setTimeout(() => { this.message = '' }, 5000)
+    },
+
+    toggleRow(id) {
+      const idx = this.selectedIds.indexOf(id)
+      if (idx >= 0) {
+        this.selectedIds.splice(idx, 1)
+      } else {
+        this.selectedIds.push(id)
+      }
+      this.selectAll = this.selectedIds.length === this.records.length && this.records.length > 0
+    },
+
+    toggleSelectAll() {
+      if (this.selectAll) {
+        this.selectedIds = this.records.map(r => r.id)
+      } else {
+        this.selectedIds = []
+      }
+    },
+
+    async sendToWeChat() {
+      if (this.selectedIds.length === 0) {
+        this.showMessage('请先选择要发送的记录', 'error')
+        return
+      }
+      this.sending = true
+      try {
+        // 截图当前页面内容
+        const el = this.$refs.tableWrapper
+        const canvas = await html2canvas(el, {
+          backgroundColor: '#ffffff',
+          scale: 2,
+          useCORS: true
+        })
+        const imageData = canvas.toDataURL('image/png')
+
+        // 发送到后端 → 公众号
+        const res = await axios.post(`${API_BASE}/wechat/send`, {
+          imageData: imageData,
+          selectedIds: this.selectedIds,
+          keyword: this.keyword || ''
+        })
+
+        if (res.data.success) {
+          this.showMessage(`✅ 已发送到公众号草稿！文章ID: ${res.data.articleId}`, 'success')
+          this.selectedIds = []
+          this.selectAll = false
+        } else {
+          this.showMessage('❌ 发送失败: ' + (res.data.message || '未知错误'), 'error')
+        }
+      } catch (e) {
+        this.showMessage('❌ 发送失败: ' + (e.response?.data?.message || e.message), 'error')
+      } finally {
+        this.sending = false
+      }
     },
 
     async loadStats() {
@@ -137,6 +212,8 @@ export default {
     async search() {
       this.loading = true
       this.searched = true
+      this.selectedIds = []
+      this.selectAll = false
       try {
         const params = { page: this.page, size: this.size }
         if (this.keyword) params.keyword = this.keyword
@@ -173,6 +250,7 @@ export default {
       try {
         await axios.delete(`${API_BASE}/${id}`)
         this.showMessage('删除成功', 'success')
+        this.selectedIds = this.selectedIds.filter(sid => sid !== id)
         this.search()
       } catch (e) {
         this.showMessage('删除失败', 'error')
@@ -271,6 +349,16 @@ body {
 
 .date-sep { color: #999; }
 
+.select-all-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #666;
+  cursor: pointer;
+  user-select: none;
+}
+
 .btn {
   padding: 8px 16px;
   border: none;
@@ -290,6 +378,9 @@ body {
 
 .btn-backup { background: #10b981; color: #fff; }
 .btn-backup:hover:not(:disabled) { background: #059669; }
+
+.btn-wechat { background: #07c160; color: #fff; font-weight: 600; }
+.btn-wechat:hover:not(:disabled) { background: #06ad56; }
 
 .btn-danger-sm {
   padding: 4px 10px;
@@ -353,7 +444,9 @@ body {
 }
 
 .history-table tr:hover td { background: #f8fafc; }
+.history-table tr.selected td { background: #eef2ff; }
 
+.col-cb { width: 40px; text-align: center; }
 .col-id { width: 50px; text-align: center; color: #999; }
 .col-title { min-width: 180px; }
 .col-url { min-width: 200px; }
