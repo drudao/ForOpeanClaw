@@ -79,4 +79,11 @@ public class HistoryService {
     public long getTotalCount() {
         return repository.count();
     }
+
+    /**
+     * 根据 ID 列表获取记录
+     */
+    public List<HistoryRecord> getRecordsByIds(List<Long> ids) {
+        return repository.findAllById(ids);
+    }
 }

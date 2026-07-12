@@ -90,9 +90,11 @@ public class ChromeHistoryReader {
      * Chrome 时间戳（1601-01-01 以来的微秒数）转 LocalDateTime
      */
     private LocalDateTime chromeTimeToLocalDateTime(long chromeTime) {
-        // Chrome 时间戳起点: 1601-01-01 00:00:00 UTC
-        long epochMicros = (chromeTime - 11644473600000000L) * 10;
-        long epochMillis = epochMicros / 1000;
-        return LocalDateTime.ofEpochSecond(epochMillis / 1000, 0, ZoneOffset.UTC);
+        // Chrome 时间戳起点: 1601-01-01 00:00:00 UTC（微秒）
+        // Unix 时间戳起点: 1970-01-01 00:00:00 UTC（秒）
+        // 差值: 11644473600 秒 = 11644473600000000 微秒
+        long unixMicros = chromeTime - 11644473600000000L;
+        long unixSeconds = unixMicros / 1_000_000L;
+        return LocalDateTime.ofEpochSecond(unixSeconds, 0, ZoneOffset.UTC);
     }
 }

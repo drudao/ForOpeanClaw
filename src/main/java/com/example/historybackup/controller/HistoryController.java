@@ -8,7 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
-import java.util.Map;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/history")
@@ -64,5 +64,18 @@ public class HistoryController {
     public ResponseEntity<Map<String, Object>> stats() {
         long total = historyService.getTotalCount();
         return ResponseEntity.ok(Map.of("totalCount", total));
+    }
+
+    /**
+     * 根据 ID 列表获取记录
+     */
+    @GetMapping("/by-ids")
+    public ResponseEntity<List<HistoryRecord>> getByIds(@RequestParam("ids") String ids) {
+        List<Long> idList = Arrays.stream(ids.split(","))
+                .map(String::trim)
+                .map(Long::parseLong)
+                .toList();
+        List<HistoryRecord> records = historyService.getRecordsByIds(idList);
+        return ResponseEntity.ok(records);
     }
 }

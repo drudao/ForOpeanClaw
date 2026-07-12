@@ -139,4 +139,26 @@ class HistoryControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(0));
     }
+
+    @Test
+    void shouldGetRecordsByIds() throws Exception {
+        when(historyService.getRecordsByIds(List.of(1L, 2L)))
+                .thenReturn(List.of(sampleRecord));
+
+        mockMvc.perform(get("/api/history/by-ids")
+                        .param("ids", "1,2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].title").value("Example Page"));
+    }
+
+    @Test
+    void shouldReturnEmptyWhenGettingNonExistentIds() throws Exception {
+        when(historyService.getRecordsByIds(List.of(999L)))
+                .thenReturn(List.of());
+
+        mockMvc.perform(get("/api/history/by-ids")
+                        .param("ids", "999"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+    }
 }

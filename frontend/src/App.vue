@@ -170,16 +170,26 @@ export default {
       }
       this.sending = true
       try {
-        // 截图当前页面内容
-        const el = this.$refs.tableWrapper
-        const canvas = await html2canvas(el, {
-          backgroundColor: '#ffffff',
-          scale: 2,
-          useCORS: true
-        })
-        const imageData = canvas.toDataURL('image/png')
+        // 1. 使用 html2canvas 截图表格区域
+        const tableWrapper = this.$refs.tableWrapper
+        if (!tableWrapper) {
+          this.showMessage('❌ 未找到表格区域', 'error')
+          return
+        }
 
-        // 发送到后端 → 公众号
+        // 清除选中样式确保截图干净
+        const canvas = await html2canvas(tableWrapper, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          allowTaint: true,
+          logging: false
+        })
+
+        const imageData = canvas.toDataURL('image/png')
+        const imageSize = Math.round((imageData.length * 3) / 4 / 1024)
+
+        // 2. 发送到后端（由后端处理微信上传与草稿创建）
         const res = await axios.post(`${API_BASE}/wechat/send`, {
           imageData: imageData,
           selectedIds: this.selectedIds,
@@ -187,14 +197,14 @@ export default {
         })
 
         if (res.data.success) {
-          this.showMessage(`✅ 已发送到公众号草稿！文章ID: ${res.data.articleId}`, 'success')
+          this.showMessage(`✅ 截图已发送到公众号草稿！文章ID: ${res.data.articleId}（截图 ${imageSize} KB）`, 'success')
           this.selectedIds = []
           this.selectAll = false
         } else {
           this.showMessage('❌ 发送失败: ' + (res.data.message || '未知错误'), 'error')
         }
       } catch (e) {
-        this.showMessage('❌ 发送失败: ' + (e.response?.data?.message || e.message), 'error')
+        this.showMessage('❌ 发送失败: ' + (e.response?.data?.message || '后端服务未启动或截图出错: ' + e.message), 'error')
       } finally {
         this.sending = false
       }

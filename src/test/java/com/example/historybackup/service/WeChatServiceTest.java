@@ -53,16 +53,12 @@ class WeChatServiceTest {
 
     @Test
     void shouldRejectNonExistentRecordIds() {
-        when(repository.findAllById(List.of(999L))).thenReturn(List.of());
-
-        // 即使没有选中记录，流程也应继续（但截图会显示空）
         String fakeImage = "data:image/png;base64," + Base64.getEncoder().encodeToString(new byte[]{1, 2, 3, 4});
 
         Map<String, Object> result = weChatService.sendScreenshotToWeChat(
                 fakeImage, List.of(999L), "");
 
-        // 应该会失败因为 WeChat API 调用会失败（没有真正的 token）
-        // 这里验证返回结构正确
+        // 会失败因为 WeChat API token 获取失败（无 appId/secret）
         assertFalse((boolean) result.get("success"));
     }
 

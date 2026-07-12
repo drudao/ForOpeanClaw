@@ -33,30 +33,30 @@ function bg(slide, color) {
 
 function addHeaderBar(slide, title, subtitle) {
   slide.addShape(pptx.ShapeType.rect, {
-    x: 0, y: 0, w: 10, h: 1.1, fill: { color: C.navy }
+    x: 0, y: 0, w: 10, h: 0.9, fill: { color: C.navy }
   });
   slide.addShape(pptx.ShapeType.rect, {
-    x: 0.5, y: 1.0, w: 2.0, h: 0.04, fill: { color: C.indigo }
+    x: 0.5, y: 0.85, w: 1.8, h: 0.035, fill: { color: C.indigo }
   });
   slide.addText(title, {
-    x: 0.5, y: 0.15, w: 9, h: 0.55,
-    fontSize: 22, color: C.white, bold: true, fontFace: 'Arial'
+    x: 0.5, y: 0.1, w: 9, h: 0.45,
+    fontSize: 20, color: C.white, bold: true, fontFace: 'Arial'
   });
   if (subtitle) {
     slide.addText(subtitle, {
-      x: 0.5, y: 0.65, w: 9, h: 0.3,
-      fontSize: 12, color: C.slate400, fontFace: 'Arial'
+      x: 0.5, y: 0.52, w: 9, h: 0.3,
+      fontSize: 10, color: C.slate400, fontFace: 'Arial'
     });
   }
 }
 
 function addFooter(slide, text) {
   slide.addShape(pptx.ShapeType.rect, {
-    x: 0, y: 5.35, w: 10, h: 0.275, fill: { color: C.navy }
+    x: 0, y: 5.38, w: 10, h: 0.245, fill: { color: C.navy }
   });
   slide.addText(text || 'Sylvanas · 2026-07-12', {
-    x: 0.5, y: 5.35, w: 9, h: 0.275,
-    fontSize: 8, color: C.slate400, align: 'right', fontFace: 'Arial'
+    x: 0.5, y: 5.38, w: 9, h: 0.245,
+    fontSize: 7, color: C.slate400, align: 'right', fontFace: 'Arial'
   });
 }
 
@@ -88,30 +88,52 @@ function sectionSlide(title, subtitle) {
 }
 
 function contentRows(slide, items, startY) {
-  let y = startY || 1.35;
-  const step = 0.265;
+  let y = startY || 1.2;
+  const step = 0.22;
+  const maxY = 5.2; // Keep within footer
   items.forEach(line => {
-    if (line === '-') { y += 0.08; return; }
+    if (y >= maxY) return; // overflow protection
+    if (line === '-') { y += 0.06; return; }
     if (line.startsWith('##')) {
       const txt = line.replace(/^##\s*/, '');
       slide.addShape(pptx.ShapeType.rect, {
-        x: 0.5, y: y + 0.04, w: 1.3, h: 0.02, fill: { color: C.indigo }
+        x: 0.5, y: y + 0.03, w: 1.2, h: 0.018, fill: { color: C.indigo }
       });
       slide.addText(txt, {
         x: 0.5, y, w: 9, h: step + 0.05,
-        fontSize: 14, color: C.navy, bold: true, fontFace: 'Arial', valign: 'middle'
+        fontSize: 12, color: C.navy, bold: true, fontFace: 'Arial', valign: 'middle'
       });
-      y += step + 0.05;
+      y += step + 0.03;
     } else {
       const indent = line.indexOf('  -') === 0 ? 0.8 : line.startsWith('-') ? 0.5 : 0.5;
-      const bullet = line.startsWith('  -') ? '  ◦ ' : line.startsWith('-') ? '▸ ' : '';
-      const text = bullet + line.replace(/^\s*-\s*/, '').replace(/^\s*-\s*/, '');
-      slide.addText(text, {
+      const text = line.replace(/^\s*-\s*/, '').replace(/^\s*-\s*/, '');
+      const prefix = line.indexOf('  -') === 0 ? '  ◦ ' : line.startsWith('-') ? '▸ ' : '';
+      // Shrink font for deeply nested or long lines
+      const fontSize = text.length > 80 ? 8 : (text.length > 60 ? 9 : 10);
+      slide.addText(prefix + text, {
         x: indent, y, w: 9.2 - indent, h: step - 0.02,
-        fontSize: 11, color: C.slate800, fontFace: 'Arial', valign: 'middle'
+        fontSize: fontSize, color: C.slate800, fontFace: 'Arial', valign: 'middle'
       });
-      y += step;
+      y += step - 0.02;
     }
+  });
+}
+
+// ===== Box helper for diagrams =====
+function addBox(slide, x, y, w, h, fc, bc, text, opts) {
+  slide.addShape(pptx.ShapeType.roundRect, {
+    x, y, w, h, fill: { color: fc }, line: { color: bc, width: 1 }, rectRadius: 0.04,
+    shadow: { type: 'outer', blur: 2, offset: 1, color: '000000', opacity: 0.08 }
+  });
+  slide.addText(text, {
+    x, y, w, h, fontSize: opts?.fontSize || 8, color: C.slate800, align: 'center', valign: 'middle', fontFace: 'Arial'
+  });
+}
+
+function addArrow(slide, x1, y1, x2, y2, color, dash) {
+  slide.addShape(pptx.ShapeType.line, {
+    x: x1, y: y1, w: x2 - x1, h: y2 - y1,
+    line: { color: color || C.slate400, width: 1, endArrowType: 'triangle', dashType: dash || 'solid' }
   });
 }
 
@@ -202,62 +224,49 @@ function contentRows(slide, items, startY) {
   addHeaderBar(s, '系统架构图', 'Chrome → 后端 → H2 / 前端 / 微信 / 邮件 / GitHub');
   addFooter(s);
 
-  s.addText('数据源', { x: 0.3, y: 1.2, w: 2, h: 0.25, fontSize: 10, color: C.slate400, fontFace: 'Arial' });
-  s.addText('业务层', { x: 3.4, y: 1.2, w: 2, h: 0.25, fontSize: 10, color: C.slate400, fontFace: 'Arial' });
-  s.addText('展示/交付', { x: 6.8, y: 1.2, w: 2, h: 0.25, fontSize: 10, color: C.slate400, fontFace: 'Arial' });
+  const boxH = 0.75;
+  const y1 = 1.2; const y2 = 2.25; const y3 = 3.5;
 
-  // Row 1: Chrome
-  s.addShape(pptx.ShapeType.roundRect, { x: 0.3, y: 1.55, w: 2.0, h: 0.9, fill: { color: 'fffbeb' }, line: { color: C.amber, width: 1.5 }, rectRadius: 0.06, shadow: { type: 'outer', blur: 4, offset: 2, color: '000000', opacity: 0.1 } });
-  s.addText('Chrome 浏览器\nHistory SQLite', { x: 0.3, y: 1.55, w: 2.0, h: 0.9, fontSize: 10, color: '92400e', align: 'center', valign: 'middle', fontFace: 'Arial' });
+  s.addText('数据源', { x: 0.3, y: 1.0, w: 2, h: 0.2, fontSize: 9, color: C.slate400, fontFace: 'Arial' });
+  s.addText('业务层', { x: 3.0, y: 1.0, w: 2, h: 0.2, fontSize: 9, color: C.slate400, fontFace: 'Arial' });
+  s.addText('展示/交付', { x: 6.8, y: 1.0, w: 2, h: 0.2, fontSize: 9, color: C.slate400, fontFace: 'Arial' });
 
-  // Row 1: Spring Boot
-  s.addShape(pptx.ShapeType.roundRect, { x: 2.7, y: 1.55, w: 2.6, h: 0.9, fill: { color: 'eff6ff' }, line: { color: C.blue, width: 1.5 }, rectRadius: 0.06, shadow: { type: 'outer', blur: 4, offset: 2, color: '000000', opacity: 0.1 } });
-  s.addText('Spring Boot 后端\nController → Service → JPA', { x: 2.7, y: 1.55, w: 2.6, h: 0.9, fontSize: 10, color: '1e3a5f', align: 'center', valign: 'middle', fontFace: 'Arial' });
+  addBox(s, 0.3, y1, 2.0, boxH, 'fffbeb', C.amber, 'Chrome 浏览器\nHistory SQLite', { fontSize: 9 });
+  addBox(s, 3.0, y1, 2.2, boxH, 'eff6ff', C.blue, 'Spring Boot 后端\nController → Service → JPA', { fontSize: 9 });
+  addBox(s, 6.0, y1, 2.0, boxH, 'f5f3ff', C.indigo, 'Vue 3 前端\nhtml2canvas 多选', { fontSize: 9 });
 
-  // Arrow Chrome → Backend
-  s.addShape(pptx.ShapeType.line, { x: 2.3, y: 2.0, w: 0.4, h: 0, line: { color: C.slate400, width: 1.5, endArrowType: 'triangle' } });
+  addArrow(s, 2.3, y1 + boxH/2, 3.0, y1 + boxH/2);
+  addArrow(s, 5.2, y1 + boxH/2, 6.0, y1 + boxH/2);
+  s.addText('REST API', { x: 5.2, y: y1 - 0.2, w: 0.8, h: 0.2, fontSize: 6, color: C.slate400, align: 'center', fontFace: 'Arial' });
 
-  // Row 1: Vue Frontend
-  s.addShape(pptx.ShapeType.roundRect, { x: 5.8, y: 1.55, w: 2.0, h: 0.9, fill: { color: 'f5f3ff' }, line: { color: C.indigo, width: 1.5 }, rectRadius: 0.06, shadow: { type: 'outer', blur: 4, offset: 2, color: '000000', opacity: 0.1 } });
-  s.addText('Vue 3 前端\nhtml2canvas 多选', { x: 5.8, y: 1.55, w: 2.0, h: 0.9, fontSize: 10, color: '4c1d95', align: 'center', valign: 'middle', fontFace: 'Arial' });
+  // H2
+  addBox(s, 3.0, y2, 1.8, boxH-0.1, 'ecfdf5', C.emerald, 'H2 数据库\n(本地文件)', { fontSize: 9 });
+  addArrow(s, 4.0, y1 + boxH, 4.0, y2);
+  s.addText('JPA', { x: 3.6, y: y1 + boxH + 0.08, w: 0.5, h: 0.2, fontSize: 7, color: C.slate400, align: 'center', fontFace: 'Arial' });
 
-  // Arrow Backend → Vue
-  s.addShape(pptx.ShapeType.line, { x: 5.3, y: 2.0, w: 0.5, h: 0, line: { color: C.slate400, width: 1, endArrowType: 'triangle' } });
-  s.addText('REST API', { x: 5.3, y: 1.65, w: 0.5, h: 0.2, fontSize: 7, color: C.slate400, align: 'center', fontFace: 'Arial' });
+  // WeChat, QQ Mail, GitHub on row 3
+  addBox(s, 0.3, y3, 1.7, boxH-0.05, 'ecfdf5', C.wechat, '微信公众号\nAPI 草稿箱', { fontSize: 8 });
+  addBox(s, 2.3, y3, 1.7, boxH-0.05, 'fff1f2', C.rose, 'SMTP\nQQ 邮箱', { fontSize: 8 });
+  addBox(s, 4.3, y3, 1.7, boxH-0.05, 'eef2ff', C.indigo, 'GitHub\nForOpeanClaw', { fontSize: 8 });
 
-  // Row 2: H2
-  s.addShape(pptx.ShapeType.roundRect, { x: 2.7, y: 2.9, w: 2.0, h: 0.85, fill: { color: 'ecfdf5' }, line: { color: C.emerald, width: 1.5 }, rectRadius: 0.06, shadow: { type: 'outer', blur: 4, offset: 2, color: '000000', opacity: 0.1 } });
-  s.addText('H2 数据库\n(本地文件)', { x: 2.7, y: 2.9, w: 2.0, h: 0.85, fontSize: 10, color: '064e3b', align: 'center', valign: 'middle', fontFace: 'Arial' });
-  s.addShape(pptx.ShapeType.line, { x: 4.0, y: 2.45, w: 0, h: 0.45, line: { color: C.slate400, width: 1.5, endArrowType: 'triangle' } });
-  s.addText('JPA', { x: 3.6, y: 2.55, w: 0.4, h: 0.2, fontSize: 8, color: C.slate400, align: 'center', fontFace: 'Arial' });
+  // Dotted lines from backend to services
+  addArrow(s, 4.8, y1 + boxH, 4.8, y3, C.slate300, 'dash');
+  s.addText('WeChat / SMTP / Git', { x: 4.8, y: y2 + 0.2, w: 0.6, h: 0.6, fontSize: 6, color: C.slate400, align: 'center', fontFace: 'Arial' });
 
-  // Row 3: WeChat API
-  s.addShape(pptx.ShapeType.roundRect, { x: 0.3, y: 3.1, w: 1.8, h: 0.85, fill: { color: 'ecfdf5' }, line: { color: C.wechat, width: 1.5 }, rectRadius: 0.06, shadow: { type: 'outer', blur: 4, offset: 2, color: '000000', opacity: 0.1 } });
-  s.addText('微信公众号\nAPI 草稿箱', { x: 0.3, y: 3.1, w: 1.8, h: 0.85, fontSize: 10, color: '065f46', align: 'center', valign: 'middle', fontFace: 'Arial' });
-
-  // Row 3: QQ Mail
-  s.addShape(pptx.ShapeType.roundRect, { x: 0.3, y: 4.1, w: 1.8, h: 0.85, fill: { color: 'fff1f2' }, line: { color: C.rose, width: 1.5 }, rectRadius: 0.06, shadow: { type: 'outer', blur: 4, offset: 2, color: '000000', opacity: 0.1 } });
-  s.addText('SMTP\nQQ 邮箱', { x: 0.3, y: 4.1, w: 1.8, h: 0.85, fontSize: 10, color: '9f1239', align: 'center', valign: 'middle', fontFace: 'Arial' });
-
-  // Row 3: GitHub
-  s.addShape(pptx.ShapeType.roundRect, { x: 2.7, y: 4.1, w: 1.8, h: 0.85, fill: { color: 'eef2ff' }, line: { color: C.indigo, width: 1.5 }, rectRadius: 0.06, shadow: { type: 'outer', blur: 4, offset: 2, color: '000000', opacity: 0.1 } });
-  s.addText('GitHub\nForOpeanClaw', { x: 2.7, y: 4.1, w: 1.8, h: 0.85, fontSize: 10, color: '312e81', align: 'center', valign: 'middle', fontFace: 'Arial' });
-
-  // Arrows Backend → Services
-  s.addShape(pptx.ShapeType.line, { x: 2.7, y: 2.0, w: 0, h: 2.95, line: { color: C.slate300, width: 1, endArrowType: 'triangle', dashType: 'dash' } });
-  s.addText('WeChat / SMTP / Git', { x: 1.9, y: 3.5, w: 0.7, h: 0.25, fontSize: 7, color: C.slate400, align: 'center', fontFace: 'Arial' });
-
-  // Legend
+  // Legend - smaller, to the right
   const leg = [
-    ['fffbeb', C.amber, '数据源'], ['eff6ff', C.blue, '业务服务'],
-    ['ecfdf5', C.emerald, '数据库'], ['f5f3ff', C.indigo, '前端'],
-    ['ecfdf5', C.wechat, '微信'], ['fff1f2', C.rose, '外部服务'],
+    ['fffbeb', C.amber, '数据源'],
+    ['eff6ff', C.blue, '业务服务'],
+    ['ecfdf5', C.emerald, '数据库'],
+    ['f5f3ff', C.indigo, '前端'],
+    ['ecfdf5', C.wechat, '微信'],
+    ['fff1f2', C.rose, '外部服务'],
     ['eef2ff', C.indigo, '代码仓库']
   ];
-  s.addText('图例', { x: 6.8, y: 2.7, w: 2, h: 0.25, fontSize: 10, color: C.navy, bold: true, fontFace: 'Arial' });
+  s.addText('图例', { x: 6.8, y: 2.4, w: 2, h: 0.2, fontSize: 9, color: C.navy, bold: true, fontFace: 'Arial' });
   leg.forEach(([fc, bc, txt], i) => {
-    s.addShape(pptx.ShapeType.rect, { x: 6.8, y: 3.05 + i * 0.35, w: 0.25, h: 0.22, fill: { color: fc }, line: { color: bc, width: 0.5 } });
-    s.addText(txt, { x: 7.15, y: 3.03 + i * 0.35, w: 1.8, h: 0.25, fontSize: 9, color: C.slate600, fontFace: 'Arial', valign: 'middle' });
+    s.addShape(pptx.ShapeType.rect, { x: 6.8, y: 2.65 + i * 0.25, w: 0.22, h: 0.18, fill: { color: fc }, line: { color: bc, width: 0.5 } });
+    s.addText(txt, { x: 7.1, y: 2.63 + i * 0.25, w: 1.8, h: 0.22, fontSize: 7, color: C.slate600, fontFace: 'Arial', valign: 'middle' });
   });
 }
 
@@ -268,74 +277,52 @@ function contentRows(slide, items, startY) {
   addHeaderBar(s, '完整数据流图', '备份 / 查询 / 删除 / 微信发送 / 邮件 / GitHub');
   addFooter(s);
 
-  // Backup flow
-  s.addText('① 备份流程', { x: 0.3, y: 1.2, w: 2, h: 0.25, fontSize: 12, color: C.navy, bold: true, fontFace: 'Arial' });
-  const bSteps = [
-    { text: '点击\n备份', x: 0.15, y: 1.5, w: 0.9, h: 0.55, fc: 'f5f3ff', bc: C.indigo },
-    { text: 'POST\n/backup', x: 1.2, y: 1.5, w: 0.9, h: 0.55, fc: 'eff6ff', bc: C.blue },
-    { text: '复制\nSQLite', x: 2.25, y: 1.5, w: 0.9, h: 0.55, fc: 'fffbeb', bc: C.amber },
-    { text: 'JDBC\n解析', x: 3.3, y: 1.5, w: 0.9, h: 0.55, fc: 'fffbeb', bc: C.amber },
-    { text: '去重\n存H2', x: 4.35, y: 1.5, w: 0.9, h: 0.55, fc: 'ecfdf5', bc: C.emerald },
-    { text: '返回\n结果', x: 5.4, y: 1.5, w: 0.9, h: 0.55, fc: 'eff6ff', bc: C.blue }
-  ];
-  bSteps.forEach(o => {
-    s.addShape(pptx.ShapeType.roundRect, { x: o.x, y: o.y, w: o.w, h: o.h, fill: { color: o.fc }, line: { color: o.bc, width: 1 }, rectRadius: 0.04, shadow: { type: 'outer', blur: 2, offset: 1, color: '000000', opacity: 0.08 } });
-    s.addText(o.text, { x: o.x, y: o.y, w: o.w, h: o.h, fontSize: 7, color: C.slate800, align: 'center', valign: 'middle', fontFace: 'Arial' });
-  });
-  for (let i = 0; i < bSteps.length - 1; i++) {
-    s.addShape(pptx.ShapeType.line, { x: bSteps[i].x + bSteps[i].w, y: 1.77, w: bSteps[i+1].x - bSteps[i].x - bSteps[i].w, h: 0, line: { color: C.slate400, width: 1, endArrowType: 'triangle' } });
-  }
+  const addFlowRow = (title, steps, startY) => {
+    s.addText(title, { x: 0.3, y: startY, w: 3, h: 0.2, fontSize: 10, color: C.navy, bold: true, fontFace: 'Arial' });
+    const boxY = startY + 0.22;
+    steps.forEach((o, i) => {
+      addBox(s, o.x, boxY, o.w, 0.4, o.fc, o.bc, o.text, { fontSize: 6 });
+      if (i < steps.length - 1) {
+        const nextX = steps[i+1].x;
+        addArrow(s, o.x + o.w, boxY + 0.2, nextX, boxY + 0.2);
+      }
+    });
+  };
 
-  // Query flow
-  s.addText('② 查询流程', { x: 0.3, y: 2.25, w: 2, h: 0.25, fontSize: 12, color: C.navy, bold: true, fontFace: 'Arial' });
-  const qSteps = [
-    { text: 'Vue\n输入条件', x: 0.15, y: 2.55, w: 1.1, h: 0.55, fc: 'f5f3ff', bc: C.indigo },
-    { text: 'GET\n/history', x: 1.4, y: 2.55, w: 1.1, h: 0.55, fc: 'eff6ff', bc: C.blue },
-    { text: 'JPA\n查H2', x: 2.65, y: 2.55, w: 1.1, h: 0.55, fc: 'ecfdf5', bc: C.emerald },
-    { text: '返回\nJSON', x: 3.9, y: 2.55, w: 1.1, h: 0.55, fc: 'eff6ff', bc: C.blue },
-    { text: 'Vue\n表格展示', x: 5.15, y: 2.55, w: 1.1, h: 0.55, fc: 'f5f3ff', bc: C.indigo }
-  ];
-  qSteps.forEach(o => {
-    s.addShape(pptx.ShapeType.roundRect, { x: o.x, y: o.y, w: o.w, h: o.h, fill: { color: o.fc }, line: { color: o.bc, width: 1 }, rectRadius: 0.04, shadow: { type: 'outer', blur: 2, offset: 1, color: '000000', opacity: 0.08 } });
-    s.addText(o.text, { x: o.x, y: o.y, w: o.w, h: o.h, fontSize: 7, color: C.slate800, align: 'center', valign: 'middle', fontFace: 'Arial' });
-  });
-  for (let i = 0; i < qSteps.length - 1; i++) {
-    s.addShape(pptx.ShapeType.line, { x: qSteps[i].x + qSteps[i].w, y: 2.82, w: qSteps[i+1].x - qSteps[i].x - qSteps[i].w, h: 0, line: { color: C.slate400, width: 1, endArrowType: 'triangle' } });
-  }
+  addFlowRow('① 备份流程', [
+    { text: '点击备份', x: 0.15, w: 0.7, fc: 'f5f3ff', bc: C.indigo },
+    { text: 'POST /backup', x: 1.0, w: 0.85, fc: 'eff6ff', bc: C.blue },
+    { text: '复制SQLite', x: 2.0, w: 0.75, fc: 'fffbeb', bc: C.amber },
+    { text: 'JDBC解析', x: 2.9, w: 0.75, fc: 'fffbeb', bc: C.amber },
+    { text: '去重存H2', x: 3.8, w: 0.75, fc: 'ecfdf5', bc: C.emerald },
+    { text: '返回结果', x: 4.7, w: 0.7, fc: 'eff6ff', bc: C.blue }
+  ], 1.05);
 
-  // WeChat flow
-  s.addText('③ 微信发送流程 (新增)', { x: 0.3, y: 3.2, w: 3, h: 0.25, fontSize: 12, color: C.navy, bold: true, fontFace: 'Arial' });
-  const wcSteps = [
-    { text: 'Vue\n勾选行', x: 0.15, y: 3.5, w: 0.9, h: 0.5, fc: 'f5f3ff', bc: C.indigo },
-    { text: 'html2\ncanvas', x: 1.15, y: 3.5, w: 0.9, h: 0.5, fc: 'f5f3ff', bc: C.indigo },
-    { text: 'POST\n/wechat/send', x: 2.15, y: 3.5, w: 1.0, h: 0.5, fc: 'eff6ff', bc: C.blue },
-    { text: '微信\n上传素材', x: 3.25, y: 3.5, w: 0.9, h: 0.5, fc: 'ecfdf5', bc: C.wechat },
-    { text: '微信\n创建草稿', x: 4.25, y: 3.5, w: 0.9, h: 0.5, fc: 'ecfdf5', bc: C.wechat },
-    { text: '返回\narticleId', x: 5.25, y: 3.5, w: 0.9, h: 0.5, fc: 'eff6ff', bc: C.blue }
-  ];
-  wcSteps.forEach(o => {
-    s.addShape(pptx.ShapeType.roundRect, { x: o.x, y: o.y, w: o.w, h: o.h, fill: { color: o.fc }, line: { color: o.bc, width: 1 }, rectRadius: 0.04, shadow: { type: 'outer', blur: 2, offset: 1, color: '000000', opacity: 0.08 } });
-    s.addText(o.text, { x: o.x, y: o.y, w: o.w, h: o.h, fontSize: 7, color: C.slate800, align: 'center', valign: 'middle', fontFace: 'Arial' });
-  });
-  for (let i = 0; i < wcSteps.length - 1; i++) {
-    s.addShape(pptx.ShapeType.line, { x: wcSteps[i].x + wcSteps[i].w, y: 3.75, w: wcSteps[i+1].x - wcSteps[i].x - wcSteps[i].w, h: 0, line: { color: C.slate400, width: 1, endArrowType: 'triangle' } });
-  }
+  addFlowRow('② 查询流程', [
+    { text: 'Vue输入条件', x: 0.15, w: 0.85, fc: 'f5f3ff', bc: C.indigo },
+    { text: 'GET /history', x: 1.15, w: 0.9, fc: 'eff6ff', bc: C.blue },
+    { text: 'JPA查H2', x: 2.2, w: 0.8, fc: 'ecfdf5', bc: C.emerald },
+    { text: '返回JSON', x: 3.15, w: 0.8, fc: 'eff6ff', bc: C.blue },
+    { text: 'Vue表格展示', x: 4.1, w: 0.85, fc: 'f5f3ff', bc: C.indigo }
+  ], 1.85);
 
-  // Email + GitHub flow
-  s.addText('④ 邮件 & GitHub 推送', { x: 0.3, y: 4.2, w: 3, h: 0.25, fontSize: 12, color: C.navy, bold: true, fontFace: 'Arial' });
-  const flow = [
-    { text: 'Node 脚本\nSMTP 直连', x: 0.15, y: 4.5, w: 1.2, h: 0.55, fc: 'eff6ff', bc: C.blue },
-    { text: 'QQ 邮箱\n带附件', x: 1.5, y: 4.5, w: 1.2, h: 0.55, fc: 'fff1f2', bc: C.rose },
-    { text: 'Git 命令\nHTTPS+Token', x: 3.5, y: 4.5, w: 1.2, h: 0.55, fc: 'eff6ff', bc: C.blue },
-    { text: 'GitHub\n远程仓库', x: 4.85, y: 4.5, w: 1.2, h: 0.55, fc: 'eef2ff', bc: C.indigo }
-  ];
-  flow.forEach(o => {
-    s.addShape(pptx.ShapeType.roundRect, { x: o.x, y: o.y, w: o.w, h: o.h, fill: { color: o.fc }, line: { color: o.bc, width: 1 }, rectRadius: 0.04, shadow: { type: 'outer', blur: 2, offset: 1, color: '000000', opacity: 0.08 } });
-    s.addText(o.text, { x: o.x, y: o.y, w: o.w, h: o.h, fontSize: 8, color: C.slate800, align: 'center', valign: 'middle', fontFace: 'Arial' });
-  });
-  s.addShape(pptx.ShapeType.line, { x: 1.35, y: 4.77, w: 0.15, h: 0, line: { color: C.slate400, width: 1, endArrowType: 'triangle' } });
-  s.addShape(pptx.ShapeType.line, { x: 2.7, y: 4.77, w: 0.8, h: 0, line: { color: C.slate300, width: 1, dashType: 'dash' } });
-  s.addShape(pptx.ShapeType.line, { x: 4.7, y: 4.77, w: 0.15, h: 0, line: { color: C.slate400, width: 1, endArrowType: 'triangle' } });
+  addFlowRow('③ 微信发送流程 (新增)', [
+    { text: 'Vue勾选行', x: 0.15, w: 0.7, fc: 'f5f3ff', bc: C.indigo },
+    { text: 'html2canvas', x: 1.0, w: 0.75, fc: 'f5f3ff', bc: C.indigo },
+    { text: 'POST /wechat/send', x: 1.9, w: 0.95, fc: 'eff6ff', bc: C.blue },
+    { text: '微信上传素材', x: 3.0, w: 0.8, fc: 'ecfdf5', bc: C.wechat },
+    { text: '创建草稿', x: 3.95, w: 0.75, fc: 'ecfdf5', bc: C.wechat },
+    { text: '返回articleId', x: 4.85, w: 0.8, fc: 'eff6ff', bc: C.blue }
+  ], 2.65);
+
+  addFlowRow('④ 邮件 & GitHub 推送', [
+    { text: 'Node脚本\nSMTP直连', x: 0.15, w: 1.0, fc: 'eff6ff', bc: C.blue },
+    { text: 'QQ邮箱\n带附件', x: 1.3, w: 1.0, fc: 'fff1f2', bc: C.rose },
+    { text: 'Git命令\nHTTPS+Token', x: 3.2, w: 1.0, fc: 'eff6ff', bc: C.blue },
+    { text: 'GitHub\n远程仓库', x: 4.35, w: 1.0, fc: 'eef2ff', bc: C.indigo }
+  ], 3.45);
+
+  addArrow(s, 2.3, 3.95, 3.2, 3.95, C.slate300, 'dash');
 }
 
 // ----- S7: API Design -----
@@ -346,36 +333,36 @@ function contentRows(slide, items, startY) {
   addFooter(s);
 
   const rows = [
-    [{ text: '方法', options: { bold: true, color: C.white, fill: { color: C.navy }, fontSize: 10, fontFace: 'Arial' } },
-     { text: '路径', options: { bold: true, color: C.white, fill: { color: C.navy }, fontSize: 10, fontFace: 'Arial' } },
-     { text: '参数', options: { bold: true, color: C.white, fill: { color: C.navy }, fontSize: 10, fontFace: 'Arial' } },
-     { text: '说明', options: { bold: true, color: C.white, fill: { color: C.navy }, fontSize: 10, fontFace: 'Arial' } }],
-    [{ text: 'GET', options: { color: C.blue, bold: true, fontSize: 10, fontFace: 'Arial' } },
-     { text: '/api/history', options: { fontSize: 10, fontFace: 'Arial' } },
-     { text: 'keyword, page, size, startDate, endDate', options: { fontSize: 9, fontFace: 'Arial' } },
-     { text: '分页查询历史记录', options: { fontSize: 10, fontFace: 'Arial' } }],
-    [{ text: 'DELETE', options: { color: C.rose, bold: true, fontSize: 10, fontFace: 'Arial' } },
-     { text: '/api/history/{id}', options: { fontSize: 10, fontFace: 'Arial' } },
-     { text: 'id', options: { fontSize: 9, fontFace: 'Arial' } },
-     { text: '删除单条记录', options: { fontSize: 10, fontFace: 'Arial' } }],
-    [{ text: 'POST', options: { color: C.emerald, bold: true, fontSize: 10, fontFace: 'Arial' } },
-     { text: '/api/history/backup', options: { fontSize: 10, fontFace: 'Arial' } },
-     { text: '-', options: { fontSize: 9, fontFace: 'Arial' } },
-     { text: '手动触发 Chrome 备份', options: { fontSize: 10, fontFace: 'Arial' } }],
-    [{ text: 'GET', options: { color: C.blue, bold: true, fontSize: 10, fontFace: 'Arial' } },
-     { text: '/api/history/stats', options: { fontSize: 10, fontFace: 'Arial' } },
-     { text: '-', options: { fontSize: 9, fontFace: 'Arial' } },
-     { text: '获取备份总记录数', options: { fontSize: 10, fontFace: 'Arial' } }],
-    [{ text: 'POST', options: { color: C.emerald, bold: true, fontSize: 10, fontFace: 'Arial' } },
-     { text: '/api/history/wechat/send', options: { fontSize: 10, fontFace: 'Arial' } },
-     { text: 'imageData, selectedIds, keyword', options: { fontSize: 9, fontFace: 'Arial' } },
-     { text: '截图→微信素材→公众号草稿', options: { fontSize: 10, fontFace: 'Arial' } }]
+    [{ text: '方法', options: { bold: true, color: C.white, fill: { color: C.navy }, fontSize: 9, fontFace: 'Arial' } },
+     { text: '路径', options: { bold: true, color: C.white, fill: { color: C.navy }, fontSize: 9, fontFace: 'Arial' } },
+     { text: '参数', options: { bold: true, color: C.white, fill: { color: C.navy }, fontSize: 9, fontFace: 'Arial' } },
+     { text: '说明', options: { bold: true, color: C.white, fill: { color: C.navy }, fontSize: 9, fontFace: 'Arial' } }],
+    [{ text: 'GET', options: { color: C.blue, bold: true, fontSize: 9, fontFace: 'Arial' } },
+     { text: '/api/history', options: { fontSize: 9, fontFace: 'Arial' } },
+     { text: 'keyword, page, size, startDate, endDate', options: { fontSize: 8, fontFace: 'Arial' } },
+     { text: '分页查询历史记录', options: { fontSize: 9, fontFace: 'Arial' } }],
+    [{ text: 'DELETE', options: { color: C.rose, bold: true, fontSize: 9, fontFace: 'Arial' } },
+     { text: '/api/history/{id}', options: { fontSize: 9, fontFace: 'Arial' } },
+     { text: 'id', options: { fontSize: 8, fontFace: 'Arial' } },
+     { text: '删除单条记录', options: { fontSize: 9, fontFace: 'Arial' } }],
+    [{ text: 'POST', options: { color: C.emerald, bold: true, fontSize: 9, fontFace: 'Arial' } },
+     { text: '/api/history/backup', options: { fontSize: 9, fontFace: 'Arial' } },
+     { text: '-', options: { fontSize: 8, fontFace: 'Arial' } },
+     { text: '手动触发 Chrome 备份', options: { fontSize: 9, fontFace: 'Arial' } }],
+    [{ text: 'GET', options: { color: C.blue, bold: true, fontSize: 9, fontFace: 'Arial' } },
+     { text: '/api/history/stats', options: { fontSize: 9, fontFace: 'Arial' } },
+     { text: '-', options: { fontSize: 8, fontFace: 'Arial' } },
+     { text: '获取备份总记录数', options: { fontSize: 9, fontFace: 'Arial' } }],
+    [{ text: 'POST', options: { color: C.emerald, bold: true, fontSize: 9, fontFace: 'Arial' } },
+     { text: '/api/history/wechat/send', options: { fontSize: 9, fontFace: 'Arial' } },
+     { text: 'imageData, selectedIds, keyword', options: { fontSize: 8, fontFace: 'Arial' } },
+     { text: '截图→微信素材→公众号草稿', options: { fontSize: 9, fontFace: 'Arial' } }]
   ];
 
-  s.addTable(rows, { x: 0.35, y: 1.25, w: 9.3, h: 2.8, colW: [0.8, 2.3, 3.2, 3.0], border: { type: 'solid', color: C.slate200, pt: 1 }, rowH: [0.42, 0.42, 0.42, 0.42, 0.42, 0.42] });
+  s.addTable(rows, { x: 0.3, y: 1.1, w: 9.4, h: 2.4, colW: [0.7, 2.3, 3.2, 3.2], border: { type: 'solid', color: C.slate200, pt: 1 }, rowH: [0.35, 0.35, 0.35, 0.35, 0.35, 0.35] });
 
-  s.addShape(pptx.ShapeType.rect, { x: 0.5, y: 4.2, w: 1.3, h: 0.025, fill: { color: C.indigo } });
-  s.addText('核心后端类', { x: 0.5, y: 4.3, w: 9, h: 0.3, fontSize: 14, color: C.navy, bold: true, fontFace: 'Arial' });
+  s.addShape(pptx.ShapeType.rect, { x: 0.5, y: 3.7, w: 1.2, h: 0.025, fill: { color: C.indigo } });
+  s.addText('核心后端类', { x: 0.5, y: 3.78, w: 9, h: 0.25, fontSize: 12, color: C.navy, bold: true, fontFace: 'Arial' });
   s.addText(
     'HistoryController      REST API 入口，5 个端点' + "\n" +
     'WeChatController         微信公众号 API 转发' + "\n" +
@@ -384,7 +371,7 @@ function contentRows(slide, items, startY) {
     'ChromeHistoryReader   SQLite 文件读取 + 时间戳转换' + "\n" +
     'HistoryRecord           JPA 实体，映射 history_records 表' + "\n" +
     'HistoryRecordRepository Spring Data JPA 自定义查询接口',
-    { x: 0.5, y: 4.55, w: 9, h: 0.8, fontSize: 10, color: C.slate600, fontFace: 'Courier New', valign: 'top', lineSpacingMultiple: 1.3 }
+    { x: 0.5, y: 4.05, w: 9, h: 1.1, fontSize: 8, color: C.slate600, fontFace: 'Courier New', valign: 'top', lineSpacingMultiple: 1.1 }
   );
 }
 
@@ -419,9 +406,9 @@ function contentRows(slide, items, startY) {
   addFooter(s);
 
   // Left: Frontend flow
-  s.addShape(pptx.ShapeType.roundRect, { x: 0.3, y: 1.25, w: 4.5, h: 3.9, fill: { color: C.white }, line: { color: C.slate200, width: 1 }, rectRadius: 0.06, shadow: { type: 'outer', blur: 4, offset: 2, color: '000000', opacity: 0.06 } });
-  s.addShape(pptx.ShapeType.rect, { x: 0.3, y: 1.25, w: 4.5, h: 0.35, fill: { color: C.indigo } });
-  s.addText('🖥 前端实现', { x: 0.5, y: 1.25, w: 4.1, h: 0.35, fontSize: 12, color: C.white, bold: true, fontFace: 'Arial', valign: 'middle' });
+  s.addShape(pptx.ShapeType.roundRect, { x: 0.3, y: 1.1, w: 4.6, h: 3.6, fill: { color: C.white }, line: { color: C.slate200, width: 1 }, rectRadius: 0.06, shadow: { type: 'outer', blur: 4, offset: 2, color: '000000', opacity: 0.06 } });
+  s.addShape(pptx.ShapeType.rect, { x: 0.3, y: 1.1, w: 4.6, h: 0.3, fill: { color: C.indigo } });
+  s.addText('🖥 前端实现', { x: 0.5, y: 1.1, w: 4.1, h: 0.3, fontSize: 10, color: C.white, bold: true, fontFace: 'Arial', valign: 'middle' });
 
   const feLines = [
     '每行新增 checkbox 列 (col-cb)',
@@ -437,15 +424,15 @@ function contentRows(slide, items, startY) {
   ];
   feLines.forEach((line, i) => {
     s.addText(line, {
-      x: 0.5, y: 1.75 + i * 0.28, w: 4.1, h: 0.26,
-      fontSize: 9, color: line.startsWith('  ') ? C.slate400 : C.slate800, fontFace: line.startsWith('  ') ? 'Courier New' : 'Arial', valign: 'middle'
+      x: 0.5, y: 1.55 + i * 0.25, w: 4.1, h: 0.22,
+      fontSize: 8, color: line.startsWith('  ') ? C.slate400 : C.slate800, fontFace: line.startsWith('  ') ? 'Courier New' : 'Arial', valign: 'middle'
     });
   });
 
   // Right: Backend flow
-  s.addShape(pptx.ShapeType.roundRect, { x: 5.2, y: 1.25, w: 4.5, h: 3.9, fill: { color: C.white }, line: { color: C.slate200, width: 1 }, rectRadius: 0.06, shadow: { type: 'outer', blur: 4, offset: 2, color: '000000', opacity: 0.08 } });
-  s.addShape(pptx.ShapeType.rect, { x: 5.2, y: 1.25, w: 4.5, h: 0.35, fill: { color: C.wechat } });
-  s.addText('🔧 后端 WeChatService', { x: 5.4, y: 1.25, w: 4.1, h: 0.35, fontSize: 12, color: C.white, bold: true, fontFace: 'Arial', valign: 'middle' });
+  s.addShape(pptx.ShapeType.roundRect, { x: 5.2, y: 1.1, w: 4.5, h: 3.6, fill: { color: C.white }, line: { color: C.slate200, width: 1 }, rectRadius: 0.06, shadow: { type: 'outer', blur: 4, offset: 2, color: '000000', opacity: 0.08 } });
+  s.addShape(pptx.ShapeType.rect, { x: 5.2, y: 1.1, w: 4.5, h: 0.3, fill: { color: C.wechat } });
+  s.addText('🔧 后端 WeChatService', { x: 5.4, y: 1.1, w: 4.1, h: 0.3, fontSize: 10, color: C.white, bold: true, fontFace: 'Arial', valign: 'middle' });
 
   const beLines = [
     'POST /api/history/wechat/send',
@@ -456,14 +443,14 @@ function contentRows(slide, items, startY) {
     '  → 返回 media_id',
     'createDraft(): 图文草稿',
     '  → /draft/add',
-    '  标题: 浏览器历史记录备份 - 时间',
+    '  标题: 浏览器历史记录备份',
     '  正文: 截图 + 记录表格',
     '  返回 article_id'
   ];
   beLines.forEach((line, i) => {
     s.addText(line, {
-      x: 5.4, y: 1.75 + i * 0.28, w: 4.1, h: 0.26,
-      fontSize: 9, color: line.startsWith('  →') ? C.slate400 : C.slate800, fontFace: line.startsWith('  →') ? 'Courier New' : 'Arial', valign: 'middle'
+      x: 5.4, y: 1.55 + i * 0.25, w: 4.1, h: 0.22,
+      fontSize: 8, color: line.startsWith('  →') ? C.slate400 : C.slate800, fontFace: line.startsWith('  →') ? 'Courier New' : 'Arial', valign: 'middle'
     });
   });
 }
@@ -476,65 +463,73 @@ function contentRows(slide, items, startY) {
   addFooter(s);
 
   const rows = [
-    [{ text: '测试类', options: { bold: true, color: C.white, fill: { color: C.navy }, fontSize: 10, fontFace: 'Arial' } },
-     { text: '测试方法', options: { bold: true, color: C.white, fill: { color: C.navy }, fontSize: 10, fontFace: 'Arial' } },
-     { text: '结果', options: { bold: true, color: C.white, fill: { color: C.navy }, fontSize: 10, fontFace: 'Arial' } }],
-    [{ text: 'HistoryControllerTest', options: { fontSize: 9, fontFace: 'Arial' } },
-     { text: '查询/关键词/删除/备份/统计/日期范围', options: { fontSize: 9, fontFace: 'Arial' } },
-     { text: '✅ 6 用例', options: { fontSize: 9, color: C.emerald, fontFace: 'Arial' } }],
-    [{ text: 'HistoryServiceTest', options: { fontSize: 9, fontFace: 'Arial' } },
-     { text: '备份/去重/空数据/搜索/删除/统计', options: { fontSize: 9, fontFace: 'Arial' } },
-     { text: '✅ 7 用例', options: { fontSize: 9, color: C.emerald, fontFace: 'Arial' } }],
-    [{ text: 'ChromeHistoryReaderTest', options: { fontSize: 9, fontFace: 'Arial' } },
-     { text: '文件不存在/SQLite读取/时间戳转换', options: { fontSize: 9, fontFace: 'Arial' } },
-     { text: '✅ 3 用例', options: { fontSize: 9, color: C.emerald, fontFace: 'Arial' } }],
-    [{ text: 'WeChatServiceTest', options: { fontSize: 9, fontFace: 'Arial' } },
-     { text: '无效图片/不存在ID/空选中列表', options: { fontSize: 9, fontFace: 'Arial' } },
-     { text: '✅ 3 用例', options: { fontSize: 9, color: C.emerald, fontFace: 'Arial' } }]
+    [{ text: '测试类', options: { bold: true, color: C.white, fill: { color: C.navy }, fontSize: 9, fontFace: 'Arial' } },
+     { text: '测试方法', options: { bold: true, color: C.white, fill: { color: C.navy }, fontSize: 9, fontFace: 'Arial' } },
+     { text: '结果', options: { bold: true, color: C.white, fill: { color: C.navy }, fontSize: 9, fontFace: 'Arial' } }],
+    [{ text: 'HistoryControllerTest', options: { fontSize: 8, fontFace: 'Arial' } },
+     { text: '查询/关键词/删除/备份/统计/日期范围/wechat', options: { fontSize: 8, fontFace: 'Arial' } },
+     { text: '✅ 7 用例', options: { fontSize: 8, color: C.emerald, fontFace: 'Arial' } }],
+    [{ text: 'HistoryServiceTest', options: { fontSize: 8, fontFace: 'Arial' } },
+     { text: '备份/去重/空数据/搜索/删除/统计/多ID', options: { fontSize: 8, fontFace: 'Arial' } },
+     { text: '✅ 8 用例', options: { fontSize: 8, color: C.emerald, fontFace: 'Arial' } }],
+    [{ text: 'ChromeHistoryReaderTest', options: { fontSize: 8, fontFace: 'Arial' } },
+     { text: '文件不存在/SQLite读取/时间戳转换', options: { fontSize: 8, fontFace: 'Arial' } },
+     { text: '✅ 3 用例', options: { fontSize: 8, color: C.emerald, fontFace: 'Arial' } }],
+    [{ text: 'WeChatServiceTest', options: { fontSize: 8, fontFace: 'Arial' } },
+     { text: '无效图片/不存在ID/空选中列表', options: { fontSize: 8, fontFace: 'Arial' } },
+     { text: '✅ 3 用例', options: { fontSize: 8, color: C.emerald, fontFace: 'Arial' } }]
   ];
 
-  s.addTable(rows, { x: 0.5, y: 1.3, w: 9, h: 2.5, colW: [3.0, 4.0, 2.0], border: { type: 'solid', color: C.slate200, pt: 1 }, rowH: [0.42, 0.38, 0.38, 0.38, 0.38] });
+  s.addTable(rows, { x: 0.35, y: 1.15, w: 9.3, h: 2.0, colW: [2.8, 4.5, 2.0], border: { type: 'solid', color: C.slate200, pt: 1 }, rowH: [0.35, 0.33, 0.33, 0.33, 0.33] });
 
   s.addText('技术栈: JUnit 5 + Mockito 5 + Spring Boot Test + @WebMvcTest', {
-    x: 0.5, y: 3.3, w: 9, h: 0.3, fontSize: 10, color: C.slate400, italic: true, fontFace: 'Arial'
+    x: 0.5, y: 3.0, w: 9, h: 0.25, fontSize: 8, color: C.slate400, italic: true, fontFace: 'Arial'
   });
 
-  s.addShape(pptx.ShapeType.rect, { x: 0.5, y: 3.75, w: 1.3, h: 0.025, fill: { color: C.indigo } });
-  s.addText('端到端验证', { x: 0.5, y: 3.85, w: 9, h: 0.3, fontSize: 14, color: C.navy, bold: true, fontFace: 'Arial' });
+  s.addShape(pptx.ShapeType.rect, { x: 0.5, y: 3.35, w: 1.2, h: 0.02, fill: { color: C.indigo } });
+  s.addText('端到端验证', { x: 0.5, y: 3.4, w: 9, h: 0.25, fontSize: 12, color: C.navy, bold: true, fontFace: 'Arial' });
 
   const e2eRows = [
-    [{ text: '验证项', options: { bold: true, color: C.white, fill: { color: C.navy }, fontSize: 10, fontFace: 'Arial' } },
-     { text: '结果', options: { bold: true, color: C.white, fill: { color: C.navy }, fontSize: 10, fontFace: 'Arial' } }],
-    [{ text: '微信 API token 获取', options: { fontSize: 10, fontFace: 'Arial' } }, { text: '✅ 成功 (IP白名单通过)', options: { fontSize: 10, color: C.emerald, fontFace: 'Arial' } }],
-    [{ text: '前端 npm install + build', options: { fontSize: 10, fontFace: 'Arial' } }, { text: '✅ 67 包 0 漏洞', options: { fontSize: 10, color: C.emerald, fontFace: 'Arial' } }],
-    [{ text: 'SMTP 邮件发送', options: { fontSize: 10, fontFace: 'Arial' } }, { text: '✅ 待执行 (见Step 5)', options: { fontSize: 10, color: C.amber, fontFace: 'Arial' } }],
-    [{ text: 'GitHub 推送', options: { fontSize: 10, fontFace: 'Arial' } }, { text: '✅ 待执行 (见Step 6)', options: { fontSize: 10, color: C.amber, fontFace: 'Arial' } }]
+    [{ text: '验证项', options: { bold: true, color: C.white, fill: { color: C.navy }, fontSize: 8, fontFace: 'Arial' } },
+     { text: '结果', options: { bold: true, color: C.white, fill: { color: C.navy }, fontSize: 8, fontFace: 'Arial' } }],
+    [{ text: '微信 API token 获取', options: { fontSize: 8, fontFace: 'Arial' } }, { text: '✅ 成功 (IP白名单通过)', options: { fontSize: 8, color: C.emerald, fontFace: 'Arial' } }],
+    [{ text: '前端 npm install + build', options: { fontSize: 8, fontFace: 'Arial' } }, { text: '✅ 67 包 0 漏洞', options: { fontSize: 8, color: C.emerald, fontFace: 'Arial' } }],
+    [{ text: 'SMTP 邮件发送', options: { fontSize: 8, fontFace: 'Arial' } }, { text: '✅ 待执行 (见Step 5)', options: { fontSize: 8, color: C.amber, fontFace: 'Arial' } }],
+    [{ text: 'GitHub 推送', options: { fontSize: 8, fontFace: 'Arial' } }, { text: '✅ 待执行 (见Step 6)', options: { fontSize: 8, color: C.amber, fontFace: 'Arial' } }]
   ];
 
-  s.addTable(e2eRows, { x: 0.5, y: 4.15, w: 9, h: 1.0, colW: [4.0, 5.0], border: { type: 'solid', color: C.slate200, pt: 1 }, rowH: [0.32, 0.28, 0.28, 0.28, 0.28] });
+  s.addTable(e2eRows, { x: 0.35, y: 3.65, w: 9.3, h: 1.5, colW: [3.5, 5.8], border: { type: 'solid', color: C.slate200, pt: 1 }, rowH: [0.3, 0.27, 0.27, 0.27, 0.27] });
 }
 
 // ----- S11: Project Structure -----
 {
-  const s = standardSlide('项目文件结构');
-  contentRows(s, [
-    '- browser-history-backup/',
-    '  - pom.xml — Maven (Spring Boot 3.4 / H2 / SQLite)',
-    '  - settings.xml — 阿里云 Maven 镜像',
-    '  - src/main/java/com/example/historybackup/',
-    '    - HistoryBackupApplication.java',
-    '    - controller/HistoryController.java (5 端点)',
-    '    - controller/WeChatController.java',
-    '    - service/HistoryService.java',
-    '    - service/WeChatService.java (微信 API)',
-    '    - service/ChromeHistoryReader.java',
-    '    - model/HistoryRecord.java',
-    '    - repository/HistoryRecordRepository.java',
-    '  - src/main/resources/application.yml',
-    '  - src/test/ (JUnit 5 + Mockito - 19 用例)',
-    '  - frontend/src/App.vue (Vue 3 + html2canvas)',
-    '  - docs/ (需求文档 + 测试报告 + 本 PPT)'
-  ]);
+  const s = pptx.addSlide();
+  bg(s, C.slate50);
+  addHeaderBar(s, '项目文件结构');
+  addFooter(s);
+
+  s.addText(
+    'browser-history-backup/' + "\n" +
+    '├─ pom.xml — Maven (Spring Boot 3.4 / H2 / SQLite)' + "\n" +
+    '├─ settings.xml — 阿里云 Maven 镜像' + "\n" +
+    '├─ src/main/java/com/example/historybackup/' + "\n" +
+    '│  ├─ HistoryBackupApplication.java' + "\n" +
+    '│  ├─ controller/HistoryController.java (5 端点)' + "\n" +
+    '│  ├─ controller/WeChatController.java' + "\n" +
+    '│  ├─ service/HistoryService.java' + "\n" +
+    '│  ├─ service/WeChatService.java (微信 API)' + "\n" +
+    '│  ├─ service/ChromeHistoryReader.java' + "\n" +
+    '│  ├─ model/HistoryRecord.java' + "\n" +
+    '│  └─ repository/HistoryRecordRepository.java' + "\n" +
+    '├─ src/test/ (JUnit 5 + Mockito — 19+ 用例)' + "\n" +
+    '├─ frontend/src/App.vue (Vue 3 + html2canvas)' + "\n" +
+    '├─ frontend/src/main.js' + "\n" +
+    '├─ frontend/vite.config.js' + "\n" +
+    '├─ src/main/resources/application.yml' + "\n" +
+    '└─ docs/ (需求文档 + 测试报告 + 本 PPT)',
+    { x: 0.5, y: 1.1, w: 9, h: 4.1, fontSize: 8, color: C.slate800,
+      fontFace: 'Courier New', valign: 'top', lineSpacingMultiple: 1.1 }
+  );
 }
 
 // ----- S12: GitHub & Email Summary -----

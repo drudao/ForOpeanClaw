@@ -25,7 +25,7 @@ public class WeChatController {
     public ResponseEntity<Map<String, Object>> sendToWeChat(@RequestBody Map<String, Object> request) {
         String imageData = (String) request.get("imageData");
         List<Long> selectedIds = ((List<Integer>) request.get("selectedIds"))
-                .stream().map(Long::longValue).toList();
+                .stream().map(Integer::longValue).toList();
         String keyword = (String) request.getOrDefault("keyword", "");
 
         if (imageData == null || imageData.isEmpty()) {
